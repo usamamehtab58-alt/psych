@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSYCHE-OS // Internal Conflict Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #020810;
+    --panel: #050f1e;
+    --border: #0a3060;
+    --accent: #00d4ff;
+    --accent2: #00ff9d;
+    --red: #ff2244;
+    --red-dark: #8b0020;
+    --gold: #ffd700;
+    --text: #c8e8ff;
+    --muted: #3a6080;
+    --glow: 0 0 20px rgba(0,212,255,0.4);
+    --glow-red: 0 0 20px rgba(255,34,68,0.5);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* STARFIELD */
+  #starfield {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 0;
+    background: radial-gradient(ellipse at 20% 50%, #030d1a 0%, #020810 100%);
+  }
+  .star {
+    position: absolute; background: white; border-radius: 50%;
+    animation: twinkle var(--d, 3s) ease-in-out infinite;
+  }
+  @keyframes twinkle {
+    0%,100%{opacity:var(--min,0.2)} 50%{opacity:var(--max,1)}
+  }
+
+  /* SCAN LINE */
+  body::after {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none; z-index: 999;
+  }
+
+  /* ONBOARDING SCREEN */
+  #onboarding {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+  }
+  .onboard-box {
+    border: 1px solid var(--accent);
+    padding: 60px 80px;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 0 60px rgba(0,212,255,0.15), inset 0 0 40px rgba(0,212,255,0.03);
+    max-width: 580px; width: 90%;
+    animation: flicker 0.1s infinite;
+  }
+  @keyframes flicker {
+    0%,98%{opacity:1} 99%{opacity:0.97} 100%{opacity:1}
+  }
+  .onboard-box::before, .onboard-box::after {
+    content: ''; position: absolute;
+    width: 20px; height: 20px;
+    border-color: var(--accent2); border-style: solid;
+  }
+  .onboard-box::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+  .onboard-box::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+  .boot-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; color: var(--muted); margin-bottom: 30px;
+    text-align: left; line-height: 1.8;
+    animation: typeIn 2s steps(120) forwards;
+    white-space: pre; overflow: hidden; width: 0;
+  }
+  @keyframes typeIn { to { width: 100%; } }
+
+  .onboard-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 28px; font-weight: 900;
+    color: var(--accent);
+    text-shadow: 0 0 30px var(--accent);
+    letter-spacing: 4px; margin-bottom: 8px;
+  }
+  .onboard-sub {
+    font-size: 12px; color: var(--muted); letter-spacing: 3px;
+    margin-bottom: 40px;
+  }
+  .input-wrap { position: relative; margin-bottom: 16px; }
+  .input-wrap input {
+    background: rgba(0,212,255,0.05);
+    border: 1px solid var(--muted);
+    color: var(--accent2);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 18px;
+    padding: 14px 20px;
+    width: 100%;
+    outline: none;
+    letter-spacing: 2px;
+    transition: all 0.3s;
+    text-align: center;
+  }
+  .input-wrap input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(0,212,255,0.3);
+  }
+  .input-wrap input::placeholder { color: var(--muted); }
+  .input-label {
+    font-size: 10px; letter-spacing: 3px; color: var(--muted);
+    margin-bottom: 8px; text-align: left;
+  }
+
+  /* RETURNING USER PANEL */
+  #returningPanel {
+    display: none;
+    margin-bottom: 20px;
+    border: 1px solid rgba(0,255,157,0.2);
+    background: rgba(0,255,157,0.04);
+    padding: 12px 16px;
+    text-align: left;
+  }
+  #returningPanel .return-label {
+    font-size: 9px; letter-spacing: 3px; color: var(--muted); margin-bottom: 8px;
+  }
+  .login-history-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid rgba(0,212,255,0.07);
+    font-size: 10px; color: var(--accent2); letter-spacing: 1px;
+  }
+  .login-history-item:last-child { border-bottom: none; }
+  .login-history-item .login-time { color: var(--muted); font-size: 9px; }
+  .login-use-btn {
+    background: transparent; border: 1px solid rgba(0,212,255,0.3);
+    color: var(--accent); font-family: 'Share Tech Mono'; font-size: 9px;
+    padding: 2px 8px; cursor: pointer; letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .login-use-btn:hover { border-color: var(--accent); background: rgba(0,212,255,0.1); }
+
+  .btn-init {
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Orbitron', monospace;
+    font-size: 13px; letter-spacing: 3px;
+    padding: 14px 40px; cursor: pointer;
+    transition: all 0.3s;
+    position: relative; overflow: hidden;
+    margin-top: 14px;
+  }
+  .btn-init::before {
+    content: ''; position: absolute; top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0,212,255,0.2), transparent);
+    transition: left 0.5s;
+  }
+  .btn-init:hover::before { left: 100%; }
+  .btn-init:hover {
+    background: rgba(0,212,255,0.1);
+    box-shadow: var(--glow);
+    color: white;
+  }
+
+  /* MAIN APP */
+  #app { display: none; position: relative; z-index: 1; min-height: 100vh; padding: 20px; }
+
+  /* HEADER */
+  .header {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+  .header-left { font-size: 10px; color: var(--muted); line-height: 1.8; }
+  .header-center { text-align: center; }
+  .system-title {
+    font-family: 'Orbitron', monospace; font-size: 18px; font-weight: 900;
+    color: var(--accent); letter-spacing: 4px;
+    text-shadow: 0 0 20px var(--accent);
+  }
+  .subject-name {
+    font-family: 'Orbitron', monospace; font-size: 13px;
+    color: var(--accent2); letter-spacing: 2px; margin-top: 4px;
+  }
+  .header-right { text-align: right; font-size: 10px; color: var(--muted); line-height: 1.8; }
+
+  /* SCORE PANEL */
+  .score-panel {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-bottom: 24px;
+  }
+  .score-card {
+    border: 1px solid var(--border);
+    padding: 20px 24px;
+    position: relative; overflow: hidden;
+    background: var(--panel);
+  }
+  .score-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+  .score-label { font-size: 9px; letter-spacing: 3px; color: var(--muted); margin-bottom: 8px; }
+  .score-value {
+    font-family: 'Orbitron', monospace; font-size: 48px; font-weight: 900;
+    line-height: 1; transition: all 0.5s;
+  }
+  .score-value.positive { color: var(--accent2); text-shadow: 0 0 20px var(--accent2); }
+  .score-value.negative { color: var(--red); text-shadow: 0 0 20px var(--red); }
+  .score-value.neutral  { color: var(--accent); text-shadow: 0 0 20px var(--accent); }
+
+  .grade-card {
+    border: 1px solid var(--border);
+    padding: 20px 24px;
+    background: var(--panel);
+    position: relative; overflow: hidden;
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+  .grade-label { font-size: 9px; letter-spacing: 3px; color: var(--muted); margin-bottom: 10px; }
+  .grade-value {
+    font-family: 'Orbitron', monospace; font-size: 28px; font-weight: 900;
+    letter-spacing: 4px; transition: all 0.5s;
+  }
+  .stability-bar-wrap { margin-top: 12px; }
+  .stability-bar {
+    height: 6px; background: rgba(255,255,255,0.05);
+    border-radius: 3px; overflow: hidden; position: relative;
+  }
+  .stability-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.8s cubic-bezier(.4,0,.2,1), background 0.8s;
+    position: relative;
+  }
+  .stability-fill::after {
+    content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 20px;
+    background: rgba(255,255,255,0.4); border-radius: 3px;
+    filter: blur(4px);
+  }
+
+  /* ACTION BUTTONS */
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+  .btn-conflict {
+    background: linear-gradient(135deg, #1a0008, #2d000f);
+    border: 2px solid var(--red);
+    color: var(--red);
+    font-family: 'Orbitron', monospace;
+    font-size: 14px; font-weight: 700; letter-spacing: 2px;
+    padding: 22px 20px; cursor: pointer;
+    transition: all 0.3s; position: relative; overflow: hidden;
+    text-transform: uppercase;
+  }
+  .btn-conflict:hover {
+    background: linear-gradient(135deg, #2d000f, #4a0018);
+    box-shadow: 0 0 40px rgba(255,34,68,0.5), inset 0 0 20px rgba(255,34,68,0.1);
+    color: white; transform: translateY(-2px);
+  }
+  .btn-conflict::before {
+    content: '⚠'; position: absolute; top: 8px; right: 12px;
+    font-size: 16px; opacity: 0.4;
+  }
+  /* FIXED: Removed the solid red dot — now just a pure ripple ring, no solid fill */
+  .btn-conflict .pulse-ring {
+    position: absolute; top: 50%; left: 50%;
+    width: 40px; height: 40px;
+    border: 2px solid rgba(255,34,68,0.7);
+    border-radius: 50%;
+    transform: translate(-50%,-50%);
+    animation: rippleOnly 2s infinite;
+    pointer-events: none;
+  }
+  @keyframes rippleOnly {
+    0%  { width: 10px; height: 10px; opacity: 0.9; border-color: rgba(255,34,68,0.9); }
+    100%{ width: 70px; height: 70px; opacity: 0; border-color: rgba(255,34,68,0); }
+  }
+
+  .btn-stability {
+    background: linear-gradient(135deg, #001a0e, #002d1a);
+    border: 2px solid var(--accent2);
+    color: var(--accent2);
+    font-family: 'Orbitron', monospace;
+    font-size: 14px; font-weight: 700; letter-spacing: 2px;
+    padding: 22px 20px; cursor: pointer;
+    transition: all 0.3s; position: relative; overflow: hidden;
+    text-transform: uppercase;
+  }
+  .btn-stability:hover {
+    background: linear-gradient(135deg, #002d1a, #004a28);
+    box-shadow: 0 0 40px rgba(0,255,157,0.4), inset 0 0 20px rgba(0,255,157,0.1);
+    color: white; transform: translateY(-2px);
+  }
+  .btn-stability::before { content: '✦'; position: absolute; top: 8px; right: 12px; font-size: 16px; opacity: 0.4; }
+
+  /* CONFLICTS LIST */
+  .conflicts-panel {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    position: relative; overflow: hidden;
+  }
+  .conflicts-panel::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--red), transparent);
+  }
+  .panel-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; letter-spacing: 3px; color: var(--muted);
+  }
+  .panel-header .count {
+    background: var(--red-dark); color: var(--red);
+    padding: 2px 8px; border-radius: 2px; font-size: 11px;
+  }
+
+  .conflicts-list { max-height: 420px; overflow-y: auto; }
+  .conflicts-list::-webkit-scrollbar { width: 4px; }
+  .conflicts-list::-webkit-scrollbar-track { background: transparent; }
+  .conflicts-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .conflict-item {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255,34,68,0.1);
+    background: rgba(255,34,68,0.04);
+    animation: slideIn 0.4s ease;
+    position: relative; overflow: hidden;
+  }
+  .conflict-item::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--red);
+  }
+  .conflict-item.resolved {
+    background: rgba(0,255,157,0.04);
+    border-bottom-color: rgba(0,255,157,0.1);
+    opacity: 0.7;
+  }
+  .conflict-item.resolved::before { background: var(--accent2); }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .conflict-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .conflict-title { font-size: 13px; color: #fff; flex: 1; line-height: 1.4; }
+  .conflict-score {
+    font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700;
+    color: var(--red); white-space: nowrap; flex-shrink: 0;
+  }
+  .conflict-score.resolved-score { color: var(--accent2); }
+  .conflict-meta { font-size: 9px; color: var(--muted); margin-top: 6px; letter-spacing: 1px; }
+  .conflict-resolution {
+    margin-top: 8px; padding: 8px 12px;
+    background: rgba(0,255,157,0.08);
+    border-left: 2px solid var(--accent2);
+    font-size: 11px; color: var(--accent2); line-height: 1.5;
+  }
+  .conflict-resolution-label { font-size: 9px; letter-spacing: 2px; color: var(--muted); margin-bottom: 3px; }
+
+  .empty-state {
+    padding: 60px 20px; text-align: center;
+    color: var(--muted); font-size: 12px; letter-spacing: 2px;
+    line-height: 2;
+  }
+
+  /* MODAL */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85); z-index: 200;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    border: 1px solid var(--border);
+    background: #050f1e;
+    padding: 40px;
+    width: 90%; max-width: 500px;
+    position: relative;
+    animation: modalIn 0.3s cubic-bezier(.34,1.56,.64,1);
+    box-shadow: 0 0 80px rgba(0,0,0,0.8);
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal::before, .modal::after {
+    content: ''; position: absolute;
+    width: 16px; height: 16px; border-style: solid;
+  }
+  .modal.conflict-modal::before { top: -1px; left: -1px; border-color: var(--red) transparent transparent var(--red); border-width: 2px 0 0 2px; }
+  .modal.conflict-modal::after  { bottom: -1px; right: -1px; border-color: transparent var(--red) var(--red) transparent; border-width: 0 2px 2px 0; }
+  .modal.stability-modal::before { top: -1px; left: -1px; border-color: var(--accent2) transparent transparent var(--accent2); border-width: 2px 0 0 2px; }
+  .modal.stability-modal::after  { bottom: -1px; right: -1px; border-color: transparent var(--accent2) var(--accent2) transparent; border-width: 0 2px 2px 0; }
+
+  .modal-title {
+    font-family: 'Orbitron', monospace; font-size: 16px; font-weight: 900;
+    letter-spacing: 3px; margin-bottom: 6px;
+  }
+  .modal.conflict-modal .modal-title { color: var(--red); }
+  .modal.stability-modal .modal-title { color: var(--accent2); }
+  .modal-sub { font-size: 10px; color: var(--muted); letter-spacing: 2px; margin-bottom: 30px; }
+
+  .field { margin-bottom: 20px; }
+  .field label { display: block; font-size: 9px; letter-spacing: 3px; color: var(--muted); margin-bottom: 8px; }
+  .field textarea, .field input[type=number] {
+    width: 100%; background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    color: var(--text); font-family: 'Share Tech Mono', monospace; font-size: 13px;
+    padding: 12px 16px; outline: none; resize: none;
+    transition: border-color 0.3s;
+  }
+  .field textarea:focus, .field input[type=number]:focus { border-color: var(--accent); }
+  .field textarea { height: 90px; line-height: 1.6; }
+  .field input[type=number] { width: 120px; text-align: center; font-size: 20px; }
+
+  /* FIXED: Fully legible custom-styled select dropdown */
+  .field select {
+    width: 100%;
+    background: #0a1f3a;
+    border: 1px solid var(--accent);
+    color: #e8f8ff;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    padding: 12px 16px;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2300d4ff' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 38px;
+    letter-spacing: 1px;
+  }
+  .field select:focus {
+    border-color: var(--accent2);
+    box-shadow: 0 0 16px rgba(0,212,255,0.25);
+  }
+  .field select option {
+    background: #0a1f3a;
+    color: #e8f8ff;
+    padding: 10px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .score-selector { display: flex; align-items: center; gap: 12px; }
+  .score-btn {
+    width: 36px; height: 36px; border-radius: 0;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text); font-size: 18px; cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .score-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .modal-actions { display: flex; gap: 12px; margin-top: 28px; }
+  .modal-cancel {
+    flex: 1; padding: 12px; background: transparent; border: 1px solid var(--border);
+    color: var(--muted); font-family: 'Share Tech Mono'; font-size: 12px; letter-spacing: 2px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .modal-cancel:hover { border-color: var(--muted); color: var(--text); }
+  .modal-confirm {
+    flex: 2; padding: 12px; background: transparent; border: 2px solid;
+    font-family: 'Orbitron', monospace; font-size: 12px; letter-spacing: 2px;
+    cursor: pointer; transition: all 0.3s; font-weight: 700;
+  }
+  .conflict-modal .modal-confirm { border-color: var(--red); color: var(--red); }
+  .conflict-modal .modal-confirm:hover { background: rgba(255,34,68,0.15); color: white; box-shadow: var(--glow-red); }
+  .stability-modal .modal-confirm { border-color: var(--accent2); color: var(--accent2); }
+  .stability-modal .modal-confirm:hover { background: rgba(0,255,157,0.1); color: white; box-shadow: 0 0 20px rgba(0,255,157,0.4); }
+
+  /* NOTIFICATION */
+  #notification {
+    position: fixed; top: 20px; right: 20px; z-index: 300;
+    padding: 14px 20px; min-width: 280px;
+    border: 1px solid var(--accent); border-left: 3px solid var(--accent);
+    background: rgba(5,15,30,0.96);
+    font-family: 'Share Tech Mono'; font-size: 12px;
+    transform: translateX(120%); transition: transform 0.4s cubic-bezier(.34,1.56,.64,1);
+    backdrop-filter: blur(10px);
+  }
+  #notification.show { transform: translateX(0); }
+  #notification .notif-label { font-size: 9px; letter-spacing: 3px; color: var(--muted); margin-bottom: 4px; }
+  #notification .notif-grade { font-family: 'Orbitron'; font-size: 14px; font-weight: 700; }
+
+  /* DELTA FLASH */
+  .delta {
+    position: fixed; pointer-events: none; z-index: 400;
+    font-family: 'Orbitron'; font-size: 28px; font-weight: 900;
+    animation: deltaAnim 1.5s ease forwards;
+  }
+  @keyframes deltaAnim {
+    0%  { opacity: 1; transform: translateY(0) scale(1); }
+    100%{ opacity: 0; transform: translateY(-80px) scale(1.5); }
+  }
+
+  /* GLITCH on grade change */
+  .glitch { animation: glitchAnim 0.5s steps(2) forwards; }
+  @keyframes glitchAnim {
+    0%  { text-shadow: 2px 0 var(--red), -2px 0 var(--accent); }
+    25% { text-shadow: -2px 0 var(--red), 2px 0 var(--accent); transform: translateX(3px); }
+    50% { text-shadow: 2px 0 var(--accent2), -2px 0 var(--red); transform: translateX(-3px); }
+    75% { text-shadow: -2px 0 var(--accent), 2px 0 var(--red); transform: translateX(1px); }
+    100%{ text-shadow: none; transform: translateX(0); }
+  }
+
+  /* RESOLVE BUTTONS */
+  .resolve-btn {
+    margin-top: 10px;
+    background: transparent; border: 1px solid var(--muted);
+    color: var(--muted); font-family: 'Share Tech Mono'; font-size: 10px;
+    letter-spacing: 2px; padding: 5px 12px; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .resolve-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* LIVE CLOCK */
+  .live-time { font-family: 'Share Tech Mono'; font-size: 11px; color: var(--accent); }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* Footer */
+  .footer {
+    margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between;
+    font-size: 9px; color: var(--muted); letter-spacing: 2px;
+  }
+
+  /* SESSION HISTORY PANEL */
+  .history-panel {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    position: relative; overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .history-panel::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .history-toggle {
+    padding: 14px 20px;
+    border-bottom: 1px solid transparent;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; letter-spacing: 3px; color: var(--muted);
+    cursor: pointer; user-select: none; transition: color 0.2s;
+  }
+  .history-toggle:hover { color: var(--gold); }
+  .history-toggle .chevron { transition: transform 0.3s; }
+  .history-toggle.open .chevron { transform: rotate(180deg); }
+  .history-toggle.open { border-bottom-color: var(--border); }
+  .history-body { display: none; max-height: 260px; overflow-y: auto; }
+  .history-body.open { display: block; }
+  .history-entry {
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(255,215,0,0.06);
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 10px; align-items: center;
+    font-size: 10px;
+  }
+  .history-entry:hover { background: rgba(255,215,0,0.03); }
+  .he-name { color: var(--gold); letter-spacing: 1px; font-size: 11px; }
+  .he-time { color: var(--muted); font-size: 9px; }
+  .he-score { font-family: 'Orbitron'; font-size: 11px; font-weight: 700; }
+  .he-score.pos { color: var(--accent2); }
+  .he-score.neg { color: var(--red); }
+  .he-score.neu { color: var(--accent); }
+  .he-grade { color: var(--muted); font-size: 9px; letter-spacing: 1px; text-align: right; }
+  .history-empty { padding: 24px 20px; text-align: center; color: var(--muted); font-size: 10px; letter-spacing: 2px; }
+
+  /* COMIC SOUND TOGGLE */
+  .sound-toggle {
+    position: fixed; bottom: 20px; right: 20px; z-index: 300;
+    background: rgba(5,15,30,0.9); border: 1px solid var(--border);
+    color: var(--muted); font-family: 'Share Tech Mono'; font-size: 9px;
+    padding: 6px 12px; cursor: pointer; letter-spacing: 2px;
+    transition: all 0.2s; backdrop-filter: blur(6px);
+  }
+  .sound-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .sound-toggle.on { color: var(--accent2); border-color: var(--accent2); }
+
+  /* PUSH NOTIFICATION PANEL */
+  .push-panel {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    position: relative; overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .push-panel::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, #a855f7, transparent);
+  }
+  .push-header {
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; letter-spacing: 3px; color: var(--muted);
+  }
+  .push-status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted); display: inline-block;
+    margin-right: 8px; flex-shrink: 0;
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  .push-status-dot.granted { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+  .push-status-dot.denied  { background: var(--red);     box-shadow: 0 0 8px var(--red); }
+  .push-status-dot.pulsing {
+    background: #a855f7; box-shadow: 0 0 8px #a855f7;
+    animation: dotPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes dotPulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .push-body { padding: 0 20px 20px; border-top: 1px solid var(--border); }
+
+  .push-permission-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .push-permission-row p { font-size: 10px; color: var(--muted); letter-spacing: 1px; flex: 1; line-height: 1.6; }
+  .btn-grant {
+    background: transparent; border: 1px solid #a855f7;
+    color: #a855f7; font-family: 'Orbitron'; font-size: 10px;
+    letter-spacing: 2px; padding: 8px 16px; cursor: pointer;
+    transition: all 0.25s; white-space: nowrap; flex-shrink: 0;
+  }
+  .btn-grant:hover { background: rgba(168,85,247,0.12); color: #d8b4fe; border-color: #d8b4fe; box-shadow: 0 0 14px rgba(168,85,247,0.3); }
+  .btn-grant:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-grant.granted { border-color: var(--accent2); color: var(--accent2); }
+  .btn-grant.denied  { border-color: var(--red); color: var(--red); cursor: not-allowed; }
+
+  .push-interval-row {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+    flex-wrap: wrap;
+  }
+  .push-interval-label { font-size: 9px; color: var(--muted); letter-spacing: 3px; flex-shrink: 0; }
+  .interval-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .interval-chip {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); font-family: 'Share Tech Mono'; font-size: 10px;
+    padding: 5px 12px; cursor: pointer; letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .interval-chip:hover { border-color: #a855f7; color: #a855f7; }
+  .interval-chip.active { border-color: #a855f7; color: #d8b4fe; background: rgba(168,85,247,0.1); }
+
+  .push-test-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 14px;
+  }
+  .push-next-label { font-size: 9px; color: var(--muted); letter-spacing: 2px; }
+  .push-next-time  { font-size: 11px; color: #a855f7; font-family: 'Orbitron'; margin-top: 4px; }
+  .btn-test-notif {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); font-family: 'Share Tech Mono'; font-size: 10px;
+    padding: 6px 14px; cursor: pointer; letter-spacing: 2px; transition: all 0.2s;
+  }
+  .btn-test-notif:hover { border-color: #a855f7; color: #a855f7; }
+
+  /* PERMISSION DENIED BANNER */
+  .denied-banner {
+    display: none; padding: 10px 14px; margin-top: 12px;
+    background: rgba(255,34,68,0.06); border-left: 2px solid var(--red);
+    font-size: 10px; color: var(--muted); line-height: 1.6;
+  }
+  .denied-banner.show { display: block; }
+
+  #resolve-target-id { display: none; }
+</style>
+</head>
+<body>
+
+<!-- STARFIELD -->
+<div id="starfield"></div>
+
+<!-- ONBOARDING -->
+<div id="onboarding">
+  <div class="onboard-box">
+    <div class="boot-text">PSYCHE-OS v4.2 INITIALIZING...
+NEURAL INTERFACE CONNECTING...
+CONFLICT MONITOR STANDING BY...</div>
+    <div class="onboard-title">PSYCHE-OS</div>
+    <div class="onboard-sub">INTERNAL CONFLICT MONITORING SYSTEM</div>
+
+    <!-- RETURNING USER LOGIN HISTORY -->
+    <div id="returningPanel">
+      <div class="return-label">◈ KNOWN SUBJECTS DETECTED — SELECT TO RESUME</div>
+      <div id="loginHistoryList"></div>
+    </div>
+
+    <div class="input-label">SUBJECT IDENTIFICATION</div>
+    <div class="input-wrap">
+      <input type="text" id="nameInput" placeholder="ENTER DESIGNATION" maxlength="24" autocomplete="off" />
+    </div>
+    <button class="btn-init" onclick="initApp()">INITIALIZE SUBJECT</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="header">
+    <div class="header-left">
+      <div>SYSTEM: PSYCHE-OS v4.2</div>
+      <div>STATUS: <span style="color:var(--accent2)">ONLINE</span></div>
+      <div>SESSION: <span id="sessionId" style="color:var(--accent)"></span></div>
+    </div>
+    <div class="header-center">
+      <div class="system-title">PSYCHE-OS</div>
+      <div class="subject-name" id="subjectName">SUBJECT: —</div>
+    </div>
+    <div class="header-right">
+      <div class="live-time" id="liveTime"></div>
+      <div id="conflictCount" style="margin-top:4px">CONFLICTS: <span style="color:var(--red)">0</span></div>
+      <div id="resolvedCount">RESOLVED: <span style="color:var(--accent2)">0</span></div>
+    </div>
+  </div>
+
+  <!-- SCORE PANEL -->
+  <div class="score-panel">
+    <div class="score-card">
+      <div class="score-label">PSYCHE STABILITY SCORE</div>
+      <div class="score-value neutral" id="totalScore">0</div>
+    </div>
+    <div class="score-card">
+      <div class="score-label">ACTIVE CONFLICT LOAD</div>
+      <div class="score-value negative" id="conflictLoad">0</div>
+    </div>
+    <div class="grade-card">
+      <div class="grade-label">MENTAL STABILITY GRADE</div>
+      <div class="grade-value" id="gradeValue">INITIALIZING...</div>
+      <div class="stability-bar-wrap">
+        <div class="stability-bar"><div class="stability-fill" id="stabilityFill"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTION BUTTONS -->
+  <div class="actions">
+    <button class="btn-conflict" onclick="openConflictModal()">
+      <div class="pulse-ring"></div>
+      ⬡ RAISE CONFLICT
+    </button>
+    <button class="btn-stability" onclick="openStabilityModal()">
+      ◈ STABILITY ACHIEVED
+    </button>
+  </div>
+
+  <!-- SESSION HISTORY PANEL -->
+  <div class="history-panel">
+    <div class="history-toggle" id="historyToggle" onclick="toggleHistory()">
+      <span>◫ LOGIN HISTORY &amp; PREVIOUS SESSIONS</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="history-body" id="historyBody"></div>
+  </div>
+
+  <!-- PUSH NOTIFICATION PANEL -->
+  <div class="push-panel" id="pushPanel">
+    <div class="push-header">
+      <span><span class="push-status-dot" id="pushDot"></span>◉ PUSH NOTIFICATION SYSTEM</span>
+      <span id="pushStatusLabel" style="font-size:9px;color:var(--muted);letter-spacing:2px">PERMISSION: UNKNOWN</span>
+    </div>
+    <div class="push-body">
+      <div class="push-permission-row">
+        <p>Grant permission to receive OS-level push alerts about your mental grade — even when the tab is in the background or minimised.</p>
+        <button class="btn-grant" id="btnGrant" onclick="requestPushPermission()">◉ GRANT ACCESS</button>
+      </div>
+      <div class="push-interval-row">
+        <span class="push-interval-label">REMIND EVERY</span>
+        <div class="interval-chips" id="intervalChips">
+          <button class="interval-chip" onclick="setNotifInterval(1)">1 MIN</button>
+          <button class="interval-chip active" onclick="setNotifInterval(5)">5 MIN</button>
+          <button class="interval-chip" onclick="setNotifInterval(15)">15 MIN</button>
+          <button class="interval-chip" onclick="setNotifInterval(30)">30 MIN</button>
+          <button class="interval-chip" onclick="setNotifInterval(60)">1 HR</button>
+        </div>
+      </div>
+      <div class="push-test-row">
+        <div>
+          <div class="push-next-label">NEXT REMINDER</div>
+          <div class="push-next-time" id="pushNextTime">—</div>
+        </div>
+        <button class="btn-test-notif" onclick="sendTestNotification()">⚡ SEND TEST NOW</button>
+      </div>
+      <div class="denied-banner" id="deniedBanner">
+        ⚠ NOTIFICATION ACCESS DENIED — To re-enable, click the 🔒 lock icon in your browser address bar → Site settings → Notifications → Allow.
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFLICTS LIST -->
+  <div class="conflicts-panel">
+    <div class="panel-header">
+      <span>CONFLICT LOG</span>
+      <span class="count" id="activeCount">0 ACTIVE</span>
+    </div>
+    <div class="conflicts-list" id="conflictsList">
+      <div class="empty-state">
+        NO CONFLICTS DETECTED<br>
+        PSYCHE IS CLEAR<br>
+        <span style="font-size:11px;opacity:0.5">[ MONITORING ACTIVE ]</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>PSYCHE-OS // NEURAL CONFLICT MONITOR</span>
+    <span id="footerGrade"></span>
+  </div>
+</div>
+
+<!-- CONFLICT MODAL -->
+<div class="modal-overlay" id="conflictModal">
+  <div class="modal conflict-modal">
+    <div class="modal-title">⚠ RAISE CONFLICT</div>
+    <div class="modal-sub">DEFINE INTERNAL DISTURBANCE // ASSIGN SEVERITY</div>
+    <div class="field">
+      <label>CONFLICT DESCRIPTION <span style="color:var(--muted);font-size:9px;letter-spacing:1px">(OPTIONAL)</span></label>
+      <textarea id="conflictDesc" placeholder="Describe the internal conflict... (optional)"></textarea>
+    </div>
+    <div class="field">
+      <label>SEVERITY SCORE (NEGATIVE)</label>
+      <div class="score-selector">
+        <button class="score-btn" onclick="adjustScore('conflict', 1)">+</button>
+        <input type="number" id="conflictScore" value="-10" max="-1" />
+        <button class="score-btn" onclick="adjustScore('conflict', -1)">−</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModals()">ABORT</button>
+      <button class="modal-confirm" onclick="submitConflict()">LOG CONFLICT</button>
+    </div>
+  </div>
+</div>
+
+<!-- STABILITY MODAL -->
+<div class="modal-overlay" id="stabilityModal">
+  <div class="modal stability-modal">
+    <div class="modal-title">◈ STABILITY ACHIEVED</div>
+    <div class="modal-sub">DOCUMENT RESOLUTION PROTOCOL</div>
+    <div class="field">
+      <label>SELECT CONFLICT TO RESOLVE <span style="color:var(--muted);font-size:9px;letter-spacing:1px">(OPTIONAL)</span></label>
+      <select id="conflictSelect">
+        <option value="">— SELECT CONFLICT —</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>RESOLUTION ACTION TAKEN <span style="color:var(--muted);font-size:9px;letter-spacing:1px">(OPTIONAL)</span></label>
+      <textarea id="stabilityDesc" placeholder="What did you do to achieve stability? (optional)"></textarea>
+    </div>
+    <div class="field">
+      <label>STABILITY SCORE (POSITIVE)</label>
+      <div class="score-selector">
+        <button class="score-btn" onclick="adjustScore('stability', 1)">+</button>
+        <input type="number" id="stabilityScore" value="5" min="1" />
+        <button class="score-btn" onclick="adjustScore('stability', -1)">−</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModals()">ABORT</button>
+      <button class="modal-confirm" onclick="submitStability()">CONFIRM STABILITY</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICATION -->
+<div id="notification">
+  <div class="notif-label">PSYCHE GRADE UPDATE</div>
+  <div class="notif-grade" id="notifGrade"></div>
+</div>
+
+<!-- SOUND TOGGLE -->
+<button class="sound-toggle on" id="soundToggle" onclick="toggleSound()">♪ SOUND: ON</button>
+
+<!-- Hidden -->
+<input type="hidden" id="resolve-target-id" />
+
+<script>
+// ============ SOUND STATE ============
+let soundEnabled = true;
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  const btn = document.getElementById('soundToggle');
+  btn.textContent = soundEnabled ? '♪ SOUND: ON' : '♪ SOUND: OFF';
+  btn.className = 'sound-toggle ' + (soundEnabled ? 'on' : '');
+}
+
+// ============ AUDIO ENGINE ============
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+
+// CONFLICT SOUND: dissonant "you messed up" thud — ominous but not obnoxious
+function playConflictSound() {
+  if (!soundEnabled) return;
+  const t = AC.currentTime;
+
+  // Low dull thud — impact
+  const thud = AC.createOscillator();
+  const thudG = AC.createGain();
+  thud.type = 'sawtooth';
+  thud.frequency.setValueAtTime(180, t);
+  thud.frequency.exponentialRampToValueAtTime(55, t + 0.25);
+  thudG.gain.setValueAtTime(0.28, t);
+  thudG.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  thud.connect(thudG); thudG.connect(AC.destination);
+  thud.start(t); thud.stop(t + 0.32);
+
+  // Dissonant tritone dip — unsettling interval (the "devil's interval")
+  [220, 311].forEach((freq, i) => {
+    const o = AC.createOscillator();
+    const g = AC.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(freq, t + 0.15 + i * 0.07);
+    o.frequency.exponentialRampToValueAtTime(freq * 0.72, t + 0.55 + i * 0.07);
+    g.gain.setValueAtTime(0.13, t + 0.15 + i * 0.07);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.65 + i * 0.07);
+    o.connect(g); g.connect(AC.destination);
+    o.start(t + 0.15 + i * 0.07); o.stop(t + 0.7 + i * 0.07);
+  });
+}
+
+// COMIC STABILITY SOUND: triumphant fanfare + level-up sparkle + sitcom applause pattern
+function playStabilitySound() {
+  if (!soundEnabled) return;
+  const t = AC.currentTime;
+
+  // Triumphant ascending arpeggio (C major 7th)
+  const fanfare = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+  fanfare.forEach((freq, i) => {
+    const o = AC.createOscillator();
+    const g = AC.createGain();
+    o.type = i < 4 ? 'square' : 'sine';
+    o.frequency.setValueAtTime(freq, t + i * 0.07);
+    g.gain.setValueAtTime(0, t + i * 0.07);
+    g.gain.linearRampToValueAtTime(0.2, t + i * 0.07 + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.35);
+    o.connect(g); g.connect(AC.destination);
+    o.start(t + i * 0.07); o.stop(t + i * 0.07 + 0.4);
+  });
+
+  // "Ta-daa!" hold chord at the end
+  [523.25, 659.25, 783.99].forEach(freq => {
+    const o = AC.createOscillator();
+    const g = AC.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(freq, t + 0.55);
+    g.gain.setValueAtTime(0.12, t + 0.55);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+    o.connect(g); g.connect(AC.destination);
+    o.start(t + 0.55); o.stop(t + 1.25);
+  });
+
+  // Sparkle tinkle on top
+  [2093, 2637, 3136].forEach((freq, i) => {
+    const o = AC.createOscillator();
+    const g = AC.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(freq, t + 0.6 + i * 0.05);
+    g.gain.setValueAtTime(0.07, t + 0.6 + i * 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.6 + i * 0.05 + 0.3);
+    o.connect(g); g.connect(AC.destination);
+    o.start(t + 0.6 + i * 0.05); o.stop(t + 0.6 + i * 0.05 + 0.35);
+  });
+}
+
+// BOOT SOUND: dramatic Windows-esque power-on chord + glitchy scan
+function playBootSound() {
+  if (!soundEnabled) return;
+  const t = AC.currentTime;
+
+  // Initial power-on thump
+  const thump = AC.createOscillator();
+  const tG = AC.createGain();
+  thump.type = 'sine';
+  thump.frequency.setValueAtTime(60, t);
+  thump.frequency.exponentialRampToValueAtTime(30, t + 0.3);
+  tG.gain.setValueAtTime(0.5, t);
+  tG.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+  thump.connect(tG); tG.connect(AC.destination);
+  thump.start(t); thump.stop(t + 0.4);
+
+  // Ascending scan tones
+  [200, 350, 500, 700, 950, 1200].forEach((f, i) => {
+    const o = AC.createOscillator();
+    const g = AC.createGain();
+    o.type = 'square';
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.07, t + 0.2 + i * 0.07);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2 + i * 0.07 + 0.1);
+    o.connect(g); g.connect(AC.destination);
+    o.start(t + 0.2 + i * 0.07); o.stop(t + 0.2 + i * 0.07 + 0.12);
+  });
+
+  // Final "ready" ding
+  const ding = AC.createOscillator();
+  const dG = AC.createGain();
+  ding.type = 'sine';
+  ding.frequency.setValueAtTime(1760, t + 0.85);
+  dG.gain.setValueAtTime(0.2, t + 0.85);
+  dG.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+  ding.connect(dG); dG.connect(AC.destination);
+  ding.start(t + 0.85); ding.stop(t + 1.5);
+}
+
+// NOTIFICATION SOUND: quirky little "bloop bloop"
+function playNotifSound() {
+  if (!soundEnabled) return;
+  const t = AC.currentTime;
+  [880, 1320, 1760].forEach((freq, i) => {
+    const o = AC.createOscillator();
+    const g = AC.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(freq, t + i * 0.08);
+    g.gain.setValueAtTime(0.12, t + i * 0.08);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.2);
+    o.connect(g); g.connect(AC.destination);
+    o.start(t + i * 0.08); o.stop(t + i * 0.08 + 0.22);
+  });
+}
+
+// ============ STARFIELD ============
+(function buildStars() {
+  const sf = document.getElementById('starfield');
+  for (let i = 0; i < 180; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 2 + 0.5;
+    s.style.cssText = `
+      left:${Math.random()*100}%;top:${Math.random()*100}%;
+      width:${size}px;height:${size}px;
+      --d:${(Math.random()*4+1).toFixed(1)}s;
+      --min:${(Math.random()*0.2).toFixed(2)};
+      --max:${(Math.random()*0.6+0.4).toFixed(2)};
+      animation-delay:${(Math.random()*4).toFixed(1)}s;
+    `;
+    sf.appendChild(s);
+  }
+})();
+
+// ============ STATE ============
+let state = {
+  name: '', score: 0, conflicts: [], nextId: 1
+};
+
+// ============ LOCAL STORAGE PERSISTENCE ============
+const STORAGE_KEY = 'psycheos_data';
+const LOGIN_LOG_KEY = 'psycheos_logins';
+
+function saveState() {
+  try {
+    const data = {
+      name: state.name,
+      score: state.score,
+      conflicts: state.conflicts,
+      nextId: state.nextId,
+      lastSaved: new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEY + '_' + state.name, JSON.stringify(data));
+  } catch(e) {}
+}
+
+function loadState(name) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY + '_' + name);
+    if (raw) {
+      const data = JSON.parse(raw);
+      state.score = data.score || 0;
+      state.conflicts = data.conflicts || [];
+      state.nextId = data.nextId || 1;
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function recordLogin(name) {
+  try {
+    const raw = localStorage.getItem(LOGIN_LOG_KEY) || '[]';
+    const logins = JSON.parse(raw);
+    logins.unshift({
+      name: name,
+      time: new Date().toISOString(),
+      score: state.score,
+      grade: getGrade(state.score).label
+    });
+    // Keep last 20 logins
+    const trimmed = logins.slice(0, 20);
+    localStorage.setItem(LOGIN_LOG_KEY, JSON.stringify(trimmed));
+  } catch(e) {}
+}
+
+function getLoginHistory() {
+  try {
+    const raw = localStorage.getItem(LOGIN_LOG_KEY) || '[]';
+    return JSON.parse(raw);
+  } catch(e) { return []; }
+}
+
+function getKnownSubjects() {
+  try {
+    const logins = getLoginHistory();
+    const seen = new Set();
+    return logins.filter(l => {
+      if (seen.has(l.name)) return false;
+      seen.add(l.name); return true;
+    }).slice(0, 4);
+  } catch(e) { return []; }
+}
+
+// ============ ONBOARDING / LOGIN ============
+function populateLoginHistory() {
+  const subjects = getKnownSubjects();
+  const panel = document.getElementById('returningPanel');
+  const list = document.getElementById('loginHistoryList');
+  if (subjects.length === 0) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  list.innerHTML = subjects.map(s => `
+    <div class="login-history-item">
+      <span>${escHtml(s.name)}</span>
+      <span class="login-time">${new Date(s.time).toLocaleDateString('en-US',{month:'short',day:'2-digit'}) + ' ' + new Date(s.time).toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'})}</span>
+      <button class="login-use-btn" onclick="quickLogin('${escAttr(s.name)}')">RESUME</button>
+    </div>
+  `).join('');
+}
+
+function quickLogin(name) {
+  document.getElementById('nameInput').value = name;
+  initApp();
+}
+
+function initApp() {
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) { document.getElementById('nameInput').focus(); return; }
+  AC.resume();
+  state.name = name.toUpperCase();
+
+  // Load persisted state if exists
+  loadState(state.name);
+
+  document.getElementById('subjectName').textContent = 'SUBJECT: ' + state.name;
+  document.getElementById('sessionId').textContent = Math.random().toString(36).substr(2, 8).toUpperCase();
+
+  recordLogin(state.name);
+
+  const ob = document.getElementById('onboarding');
+  ob.style.transition = 'opacity 0.6s';
+  ob.style.opacity = '0';
+  setTimeout(() => { ob.style.display = 'none'; document.getElementById('app').style.display = 'block'; }, 600);
+  playBootSound();
+  renderConflicts();
+  updateUI();
+  startClock();
+  renderHistoryPanel();
+  initPushSystem();
+  setTimeout(() => showNotification(), 800);
+}
+
+// Pre-populate login history on page load
+populateLoginHistory();
+
+function startClock() {
+  function tick() {
+    const now = new Date();
+    document.getElementById('liveTime').textContent =
+      now.toLocaleTimeString('en-US', {hour12:false}) + ' // ' +
+      now.toLocaleDateString('en-US', {month:'short',day:'2-digit'}).toUpperCase();
+  }
+  tick(); setInterval(tick, 1000);
+}
+
+// ============ HISTORY PANEL ============
+function toggleHistory() {
+  const toggle = document.getElementById('historyToggle');
+  const body = document.getElementById('historyBody');
+  toggle.classList.toggle('open');
+  body.classList.toggle('open');
+  if (body.classList.contains('open')) renderHistoryPanel();
+}
+
+function renderHistoryPanel() {
+  const body = document.getElementById('historyBody');
+  const logins = getLoginHistory();
+  if (logins.length === 0) {
+    body.innerHTML = '<div class="history-empty">NO PREVIOUS SESSIONS RECORDED</div>';
+    return;
+  }
+  body.innerHTML = logins.map(l => {
+    const grade = getGrade(l.score || 0);
+    const scoreClass = (l.score || 0) > 0 ? 'pos' : (l.score || 0) < 0 ? 'neg' : 'neu';
+    const d = new Date(l.time);
+    const timeStr = d.toLocaleDateString('en-US',{month:'short',day:'2-digit',year:'2-digit'})
+      + ' ' + d.toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'});
+    return `
+      <div class="history-entry">
+        <span class="he-name">${escHtml(l.name)}</span>
+        <span class="he-time">${timeStr}</span>
+        <span class="he-score ${scoreClass}">${(l.score||0) >= 0 ? '+':''}{${l.score||0}}</span>
+        <span class="he-grade">${escHtml(l.grade || '—')}</span>
+      </div>
+    `.replace('{', '');
+  }).join('');
+}
+
+// ============ SCORE / UI ============
+const GRADES = [
+  { min: -Infinity, max: -80, label: "CATASTROPHICALLY UNHINGED",   color: "#ff0022", bar: 2 },
+  { min: -80,  max: -60, label: "EXISTENTIALLY IMPLODING",          color: "#ff1133", bar: 6 },
+  { min: -60,  max: -45, label: "CRITICALLY DERANGED",              color: "#ff2244", bar: 12 },
+  { min: -45,  max: -30, label: "SEVERELY LOSING IT",               color: "#ff4455", bar: 18 },
+  { min: -30,  max: -20, label: "AGGRESSIVELY UNSTABLE",            color: "#ff5500", bar: 24 },
+  { min: -20,  max: -12, label: "CONSIDERABLY RATTLED",             color: "#ff7700", bar: 30 },
+  { min: -12,  max: -6,  label: "MODERATELY SPIRALING",             color: "#ffaa00", bar: 36 },
+  { min: -6,   max: -1,  label: "SLIGHTLY WOBBLY",                  color: "#ffdd00", bar: 44 },
+  { min: -1,   max:  1,  label: "SUSPICIOUSLY NEUTRAL",             color: "#ffffaa", bar: 50 },
+  { min:  1,   max:  6,  label: "MILDLY FUNCTIONAL",                color: "#aaff88", bar: 56 },
+  { min:  6,   max:  12, label: "SOMEWHAT COMPOSED",                color: "#77ff66", bar: 62 },
+  { min:  12,  max:  20, label: "PASSABLY STABLE",                  color: "#44ff88", bar: 68 },
+  { min:  20,  max:  30, label: "ADEQUATELY GROUNDED",              color: "#22ffaa", bar: 74 },
+  { min:  30,  max:  45, label: "COMFORTABLY BALANCED",             color: "#00ffcc", bar: 80 },
+  { min:  45,  max:  60, label: "IMPRESSIVELY SERENE",              color: "#00eeff", bar: 86 },
+  { min:  60,  max:  80, label: "DISTURBINGLY CALM",                color: "#00ccff", bar: 92 },
+  { min:  80,  max: Infinity, label: "SUSPICIOUSLY ENLIGHTENED",    color: "#00d4ff", bar: 98 },
+];
+
+function getGrade(score) {
+  return GRADES.find(g => score >= g.min && score < g.max) || GRADES[0];
+}
+
+function updateUI(delta, isPositive) {
+  const score = state.score;
+  const grade = getGrade(score);
+
+  const sv = document.getElementById('totalScore');
+  sv.textContent = (score >= 0 ? '+' : '') + score;
+  sv.className = 'score-value ' + (score > 0 ? 'positive' : score < 0 ? 'negative' : 'neutral');
+
+  const active = state.conflicts.filter(c => !c.resolved);
+  const resolved = state.conflicts.filter(c => c.resolved);
+  const load = active.reduce((s, c) => s + c.score, 0);
+  document.getElementById('conflictLoad').textContent = load;
+  document.getElementById('conflictCount').innerHTML = `CONFLICTS: <span style="color:var(--red)">${active.length}</span>`;
+  document.getElementById('resolvedCount').innerHTML = `RESOLVED: <span style="color:var(--accent2)">${resolved.length}</span>`;
+  document.getElementById('activeCount').textContent = active.length + ' ACTIVE';
+
+  const gv = document.getElementById('gradeValue');
+  gv.textContent = grade.label;
+  gv.style.color = grade.color;
+  gv.style.textShadow = `0 0 30px ${grade.color}`;
+  gv.classList.remove('glitch');
+  void gv.offsetWidth;
+  gv.classList.add('glitch');
+
+  const fill = document.getElementById('stabilityFill');
+  fill.style.width = grade.bar + '%';
+  fill.style.background = `linear-gradient(90deg, ${grade.color}88, ${grade.color})`;
+
+  document.getElementById('footerGrade').textContent = grade.label;
+
+  document.getElementById('notifGrade').textContent = grade.label;
+  document.getElementById('notifGrade').style.color = grade.color;
+  document.getElementById('notification').style.borderColor = grade.color;
+  document.getElementById('notification').style.borderLeftColor = grade.color;
+
+  if (delta !== undefined) {
+    showDelta(delta, isPositive);
+  }
+
+  saveState();
+}
+
+function showDelta(delta, isPositive) {
+  const el = document.createElement('div');
+  el.className = 'delta';
+  el.textContent = (isPositive ? '+' : '') + delta;
+  el.style.color = isPositive ? 'var(--accent2)' : 'var(--red)';
+  el.style.left = (Math.random() * 40 + 30) + '%';
+  el.style.top = '30%';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+}
+
+function showNotification() {
+  playNotifSound();
+  const notif = document.getElementById('notification');
+  notif.classList.add('show');
+  setTimeout(() => notif.classList.remove('show'), 3500);
+}
+
+// ============ MODALS ============
+function openConflictModal() {
+  AC.resume();
+  document.getElementById('conflictDesc').value = '';
+  document.getElementById('conflictScore').value = -10;
+  document.getElementById('conflictModal').classList.add('open');
+  setTimeout(() => document.getElementById('conflictDesc').focus(), 100);
+}
+
+function openStabilityModal() {
+  AC.resume();
+  const active = state.conflicts.filter(c => !c.resolved);
+  const sel = document.getElementById('conflictSelect');
+  sel.innerHTML = '<option value="">— SELECT CONFLICT —</option>';
+  active.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.title.substring(0, 50) + (c.title.length > 50 ? '...' : '');
+    sel.appendChild(opt);
+  });
+  document.getElementById('stabilityDesc').value = '';
+  document.getElementById('stabilityScore').value = 5;
+  document.getElementById('stabilityModal').classList.add('open');
+}
+
+function closeModals() {
+  document.getElementById('conflictModal').classList.remove('open');
+  document.getElementById('stabilityModal').classList.remove('open');
+}
+
+document.getElementById('conflictModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('conflictModal')) closeModals();
+});
+document.getElementById('stabilityModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('stabilityModal')) closeModals();
+});
+
+document.getElementById('nameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') initApp();
+});
+
+function adjustScore(type, dir) {
+  const el = document.getElementById(type + 'Score');
+  let v = parseInt(el.value) || 0;
+  if (type === 'conflict') {
+    v = Math.min(-1, v + dir);
+  } else {
+    v = Math.max(1, v + dir);
+  }
+  el.value = v;
+}
+
+// ============ SUBMIT ============
+function submitConflict() {
+  const desc = document.getElementById('conflictDesc').value.trim();
+  let score = parseInt(document.getElementById('conflictScore').value) || 0;
+  if (score > 0) score = -score;
+  if (score === 0) score = -10;
+
+  const conflict = {
+    id: state.nextId++,
+    title: desc || 'UNSPECIFIED CONFLICT',
+    score: score,
+    resolved: false,
+    timestamp: new Date().toLocaleString('en-US', {hour12:false}),
+    resolution: null,
+    resolutionScore: null
+  };
+  state.conflicts.unshift(conflict);
+  state.score += score;
+  closeModals();
+  playConflictSound();
+  renderConflicts();
+  updateUI(score, false);
+  setTimeout(showNotification, 300);
+}
+
+function submitStability() {
+  const desc = document.getElementById('stabilityDesc').value.trim();
+  let score = parseInt(document.getElementById('stabilityScore').value) || 5;
+  if (score < 1) score = 1;
+  const selectedId = parseInt(document.getElementById('conflictSelect').value);
+
+  if (selectedId) {
+    const conflict = state.conflicts.find(c => c.id === selectedId);
+    if (conflict) {
+      conflict.resolved = true;
+      conflict.resolution = desc || null;
+      conflict.resolutionScore = score;
+    }
+  }
+
+  state.score += score;
+  closeModals();
+  playStabilitySound();
+  renderConflicts();
+  updateUI(score, true);
+  setTimeout(showNotification, 300);
+}
+
+// ============ RENDER ============
+function renderConflicts() {
+  const list = document.getElementById('conflictsList');
+  if (state.conflicts.length === 0) {
+    list.innerHTML = `<div class="empty-state">NO CONFLICTS DETECTED<br>PSYCHE IS CLEAR<br><span style="font-size:11px;opacity:0.5">[ MONITORING ACTIVE ]</span></div>`;
+    return;
+  }
+
+  list.innerHTML = state.conflicts.map(c => `
+    <div class="conflict-item ${c.resolved ? 'resolved' : ''}" id="ci-${c.id}">
+      <div class="conflict-top">
+        <div class="conflict-title">${escHtml(c.title)}</div>
+        <div class="conflict-score ${c.resolved ? 'resolved-score' : ''}">${c.score}</div>
+      </div>
+      <div class="conflict-meta">ID: CF-${String(c.id).padStart(4,'0')} // ${c.timestamp} // ${c.resolved ? '<span style="color:var(--accent2)">RESOLVED</span>' : '<span style="color:var(--red)">ACTIVE</span>'}</div>
+      ${c.resolution ? `
+        <div class="conflict-resolution">
+          <div class="conflict-resolution-label">RESOLUTION PROTOCOL // +${c.resolutionScore}</div>
+          ${escHtml(c.resolution)}
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s).replace(/'/g, "\\'");
+}
+
+// ============ PUSH NOTIFICATION SYSTEM ============
+let pushIntervalMinutes = 5;
+let pushTimerHandle = null;
+let pushNextFireTime = null;
+let pushNextCountdownHandle = null;
+let swRegistration = null;
+
+// Grade-aware comic messages for push notifications
+const PUSH_MESSAGES = {
+  catastrophic: [
+    "🚨 PSYCHE-OS ALERT: You are CATASTROPHICALLY UNHINGED. Please sit down.",
+    "🆘 Neural scan complete. Results: chaos. Pure chaos.",
+    "⚠️ SYSTEM WARNING: Your psyche has left the building.",
+  ],
+  bad: [
+    "😬 PSYCHE-OS: Things are not great in there. Address the chaos.",
+    "🌀 Internal conflict levels: elevated. Please hydrate and breathe.",
+    "⚡ PSYCHE-OS: Your stability bar is not looking good, chief.",
+  ],
+  neutral: [
+    "🤔 PSYCHE-OS CHECK-IN: You exist. Barely. That counts.",
+    "😐 Psyche scan: suspiciously neutral. Something is brewing.",
+    "🔍 Neural status: ambiguous. Neither thriving nor imploding.",
+  ],
+  good: [
+    "✅ PSYCHE-OS: You're holding it together! Impressive, honestly.",
+    "🌱 Mental stability: adequate to good. Don't ruin it.",
+    "💚 PSYCHE-OS: You appear… functional? Wild.",
+  ],
+  excellent: [
+    "🌟 PSYCHE-OS: Suspiciously enlightened. Are you even human?",
+    "✨ Neural scan: disturbingly calm. Please share your secrets.",
+    "🏆 PSYCHE-OS: You have achieved peak psyche. Log it. Frame it.",
+  ]
+};
+
+function getPushMessage(score) {
+  if (score < -30) return PUSH_MESSAGES.catastrophic;
+  if (score < -6)  return PUSH_MESSAGES.bad;
+  if (score < 6)   return PUSH_MESSAGES.neutral;
+  if (score < 30)  return PUSH_MESSAGES.good;
+  return PUSH_MESSAGES.excellent;
+}
+
+function randomFrom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Register a real Service Worker from /sw.js (required for Vercel/HTTPS — blob: URLs are blocked)
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return null;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    await navigator.serviceWorker.ready;
+    return reg;
+  } catch(e) {
+    console.warn('PSYCHE-OS SW registration failed, falling back to direct Notification API.', e);
+    return null;
+  }
+}
+
+async function firePushNotification() {
+  if (Notification.permission !== 'granted') return;
+  const grade = getGrade(state.score);
+  const msgPool = getPushMessage(state.score);
+  const body = randomFrom(msgPool);
+  const title = `PSYCHE-OS // ${grade.label}`;
+  const score = (state.score >= 0 ? '+' : '') + state.score;
+  const fullBody = `${body}\n\nScore: ${score} — Subject: ${state.name || 'UNKNOWN'}`;
+
+  // Try SW first (works in background), fallback to Notification API
+  let sent = false;
+  if (swRegistration) {
+    try {
+      const sw = swRegistration.active || swRegistration.installing || swRegistration.waiting;
+      if (sw) {
+        sw.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          title,
+          body: fullBody,
+          url: window.location.href
+        });
+        sent = true;
+      }
+    } catch(e) {}
+  }
+  if (!sent) {
+    // Direct Notification API — only reliable when tab is visible/focused
+    try {
+      new Notification(title, { body: fullBody, tag: 'psycheos-grade', renotify: true });
+    } catch(e) {}
+  }
+}
+
+function scheduleNextNotification() {
+  if (pushTimerHandle) clearTimeout(pushTimerHandle);
+  if (pushNextCountdownHandle) clearInterval(pushNextCountdownHandle);
+  if (Notification.permission !== 'granted') return;
+
+  const ms = pushIntervalMinutes * 60 * 1000;
+  pushNextFireTime = Date.now() + ms;
+
+  pushTimerHandle = setTimeout(() => {
+    firePushNotification();
+    scheduleNextNotification(); // reschedule
+  }, ms);
+
+  // Live countdown
+  pushNextCountdownHandle = setInterval(() => {
+    const remaining = pushNextFireTime - Date.now();
+    if (remaining <= 0) { clearInterval(pushNextCountdownHandle); return; }
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    const el = document.getElementById('pushNextTime');
+    if (el) el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }, 1000);
+
+  const el = document.getElementById('pushNextTime');
+  if (el) el.textContent = `${String(pushIntervalMinutes).padStart(2,'0')}:00`;
+}
+
+function setNotifInterval(mins) {
+  pushIntervalMinutes = mins;
+  // Update chip UI
+  document.querySelectorAll('.interval-chip').forEach(c => {
+    c.classList.toggle('active', c.textContent.trim() === (mins < 60 ? mins + ' MIN' : '1 HR'));
+  });
+  if (Notification.permission === 'granted') scheduleNextNotification();
+}
+
+async function requestPushPermission() {
+  if (!('Notification' in window)) {
+    alert('This browser does not support desktop notifications.');
+    return;
+  }
+  updatePushUI('requesting');
+  const result = await Notification.requestPermission();
+  updatePushUI(result);
+  if (result === 'granted') {
+    swRegistration = await registerServiceWorker();
+    scheduleNextNotification();
+    // Fire one immediately so the user sees it working
+    setTimeout(firePushNotification, 600);
+  }
+}
+
+function updatePushUI(status) {
+  const dot   = document.getElementById('pushDot');
+  const label = document.getElementById('pushStatusLabel');
+  const btn   = document.getElementById('btnGrant');
+  const banner= document.getElementById('deniedBanner');
+
+  dot.className = 'push-status-dot';
+  banner.classList.remove('show');
+
+  if (status === 'granted') {
+    dot.classList.add('granted');
+    label.textContent = 'PERMISSION: GRANTED'; label.style.color = 'var(--accent2)';
+    btn.textContent = '✓ ACCESS GRANTED'; btn.className = 'btn-grant granted'; btn.disabled = true;
+  } else if (status === 'denied') {
+    dot.classList.add('denied');
+    label.textContent = 'PERMISSION: DENIED'; label.style.color = 'var(--red)';
+    btn.textContent = '✗ ACCESS DENIED'; btn.className = 'btn-grant denied'; btn.disabled = true;
+    banner.classList.add('show');
+    const el = document.getElementById('pushNextTime'); if(el) el.textContent = '—';
+  } else if (status === 'requesting') {
+    dot.classList.add('pulsing');
+    label.textContent = 'PERMISSION: REQUESTING…'; label.style.color = '#a855f7';
+    btn.textContent = '…'; btn.disabled = true;
+  } else {
+    label.textContent = 'PERMISSION: NOT SET'; label.style.color = 'var(--muted)';
+    btn.textContent = '◉ GRANT ACCESS'; btn.disabled = false; btn.className = 'btn-grant';
+  }
+}
+
+function sendTestNotification() {
+  if (Notification.permission !== 'granted') {
+    requestPushPermission();
+    return;
+  }
+  firePushNotification();
+}
+
+// On app init, check existing permission state
+function initPushSystem() {
+  if (!('Notification' in window)) return;
+  const perm = Notification.permission;
+  updatePushUI(perm);
+  if (perm === 'granted') {
+    registerServiceWorker().then(reg => {
+      swRegistration = reg;
+      scheduleNextNotification();
+    });
+  }
+}
+</script>
+</body>
+</html>
